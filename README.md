@@ -250,7 +250,56 @@ decline/end engine events, and the `Call · mm:ss` transcript line — currently
 
 ---
 
-## 8. Design rules (unchanged from Phase 1)
+## 8. Swapping the model provider
+
+`getEngine()` resolves one of three interchangeable `CompanionEngine`
+implementations — nothing else in the app changes when you switch.
+
+| `ENGINE_PROVIDER` | Engine | Structured output |
+|---|---|---|
+| `anthropic` | `AnthropicEngine` | **forced** `companion_reply` tool call + prompt caching |
+| `cloudflare` | `CloudflareEngine` | JSON contract in the prompt + recovery ladder |
+| `local` | `LocalEngine` | dev fallback, no credentials needed |
+| `auto` *(default)* | Anthropic → Cloudflare → local, whichever has keys | — |
+
+### Cloudflare Workers AI
+
+```bash
+# .env.local
+ENGINE_PROVIDER=cloudflare
+CLOUDFLARE_ACCOUNT_ID=<32-hex, from `wrangler whoami`>
+CLOUDFLARE_API_TOKEN=<token with Workers AI: Read>
+CLOUDFLARE_AI_MODEL=@cf/swiss-ai/apertus-v1.5-8b
+CLOUDFLARE_AI_GATEWAY_ID=            # optional, adds cf-aig-gateway-id
+
+npm run check:cf      # verifies the model answers AND holds the contract
+```
+
+Workers AI models generally cannot be *forced* into a tool call, so
+`buildSystemPrompt(companion, ctx, "json")` swaps the tool instruction for a
+strict JSON contract and `lib/engine/structured-text.ts` recovers the reply:
+
+1. **json** — clean parse of a brace-balanced object (fences and surrounding
+   chatter stripped).
+2. **coerced** — near-miss shapes repaired: trailing commas, single quotes,
+   `startCall`/`memoryNotes` camelCase, a string instead of an array, unknown
+   moods normalised, multi-code-point emoji kept intact.
+3. **prose** — if the model ignores JSON completely, its prose is split into
+   1–3 chat bubbles, so a model that merely *emits text* still works.
+4. **none** — only then the in-persona fallback message is used.
+
+Recovery level is logged per request (`recovered reply via "prose"`), so you can
+see how well a model is holding the contract before trusting it.
+
+> Trade-off: Anthropic gets **guaranteed** structure and persona-block prompt
+> caching (much cheaper per turn at long context). Cloudflare is cheaper per
+> token but structure is best-effort and there is no cache. `npm run check:cf`
+> also reports whether the model triggers `start_call` correctly — that is the
+> single most fragile behaviour on smaller models.
+
+---
+
+## 9. Design rules (unchanged from Phase 1)
 
 - Warm cream/honey surfaces everywhere — **never** plain white, **never** dark mode
   (`color-scheme: light only`).

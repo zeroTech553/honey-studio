@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "seed": "tsx supabase/seed/seed-companions.ts"
+    "seed": "tsx supabase/seed/seed-companions.ts",
+    "check:cf": "tsx scripts/check-cloudflare.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.65.0",
